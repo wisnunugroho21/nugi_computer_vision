@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import Dataset
+import torch.optim as optim
 
 import torchvision
 import torchvision.transforms as transforms
@@ -8,8 +10,9 @@ import torchvision.transforms as transforms
 import os
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
 
-import torch.optim as optim
+device = torch.device('cuda:0')
 
 class DepthwiseSeparableConv2d(nn.Module):
     def __init__(self, nin, nout, kernel_size = 3, stride = 1, padding = 0, dilation = 1, bias = False, depth_multiplier = 1, activate_first = True):
@@ -20,7 +23,7 @@ class DepthwiseSeparableConv2d(nn.Module):
             nn.Conv2d(nin * depth_multiplier, nout, kernel_size = 1, bias = bias)
         )
 
-    def forward(self, x):
+    def forward(self, x):        
         return self.nn_layer(x)
 
 class SpatialAtrousExtractor(nn.Module):
@@ -30,17 +33,17 @@ class SpatialAtrousExtractor(nn.Module):
         self.spatial_atrous = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = rate, dilation = rate, bias = False),            
             nn.ReLU(),
-            nn.BatchNorm2d(dim_in)
+            nn.BatchNorm2d(dim_in)            
 		)
 
         self.conv1  = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, bias = False),
+            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU()
         )
         self.bn1    = nn.BatchNorm2d(dim_out)
 
         self.conv2  = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, bias = False),
+            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU()
         )
 
@@ -122,34 +125,34 @@ class SecondSpatialEncoder(nn.Module):
         xout = self.comb_extractor(xout)
         xout = self.downsampler(xout)
 
+        return xout
+
 class DownsamplerEncoder(nn.Module):
     def __init__(self, dim_in, dim_out):
         super(DownsamplerEncoder, self).__init__()
 
-        self.conv = nn.Sequential(
+        self.downsampler1 = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU(),
             nn.BatchNorm2d(dim_in),
-            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
+            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
             nn.ReLU(),
-            nn.BatchNorm2d(dim_in),
-            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_in)            
+            nn.BatchNorm2d(dim_out)
         )
 
-        self.downsampler = nn.Sequential(
+        self.downsampler2 = nn.Sequential(
+            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
+            nn.ReLU(),
+            nn.BatchNorm2d(dim_in),
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
             nn.ReLU(),
             nn.BatchNorm2d(dim_out)
         )
 
     def forward(self, x):
-        x1 = self.conv(x)
-        x1 = x + x1
-
-        x2 = self.downsampler(x1)
-        return x2
+        x1 = self.downsampler1(x)
+        x2 = self.downsampler2(x)
+        return x1 + x2
 
 class SameDimensionEncoder(nn.Module):
     def __init__(self, dim_in, dim_out):
@@ -183,19 +186,19 @@ class SameDimensionEncoder(nn.Module):
         return x2
 
 class Deeplabv4(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes = 3):
         super(Deeplabv4, self).__init__()
 
         self.conv1 = nn.Sequential(
-            DepthwiseSeparableConv2d(3, 64, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(3, 64, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
             nn.BatchNorm2d(64)
         )
 
         self.conv2 = nn.Sequential(
-            DepthwiseSeparableConv2d(64, 256, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(64, 256, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
-            nn.BatchNorm2d(128)
+            nn.BatchNorm2d(256)
         )
 
         self.enc1 = FirstSpatialEncoder(256, 256)
@@ -206,28 +209,28 @@ class Deeplabv4(nn.Module):
         self.enc6 = DownsamplerEncoder(256, 256)
 
         self.conv3 = nn.Sequential(
-            DepthwiseSeparableConv2d(128, 64, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(256, 64, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
             nn.BatchNorm2d(64)
         )
         self.conv4 = nn.Sequential(
-            DepthwiseSeparableConv2d(64, 21, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(64, num_classes, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
-            nn.BatchNorm2d(21)
+            nn.BatchNorm2d(3)
         )
 
         self.upsample1  = nn.UpsamplingBilinear2d(scale_factor = 4)
         self.conv5      = nn.Sequential(
-            DepthwiseSeparableConv2d(21, 21, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
-            nn.BatchNorm2d(21)
+            nn.BatchNorm2d(num_classes)
         )
 
         self.upsample2  = nn.UpsamplingBilinear2d(scale_factor = 4)
         self.conv6      = nn.Sequential(
-            DepthwiseSeparableConv2d(21, 21, kernel_size = 3, stride = 1),
+            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
-            nn.BatchNorm2d(21)
+            nn.BatchNorm2d(num_classes)
         )
 
     def forward(self, x):
@@ -254,79 +257,80 @@ class Deeplabv4(nn.Module):
 
         return x2
 
-class PennFudanDataset(object):
-    def __init__(self, root, transforms = None):
-        self.root = root
+class ImageDataset(Dataset):
+    def __init__(self, transforms = None):
         self.transforms = transforms
 
-        # load all image files, sorting them to
-        # ensure that they are aligned
-        self.imgs   = list(sorted(os.listdir(os.path.join(root, "PNGImages"))))
-        self.masks  = list(sorted(os.listdir(os.path.join(root, "PedMasks"))))
+        self.imgs   = list(sorted(os.listdir(os.path.join('', 'dataset/images'))))
+        self.masks  = list(sorted(os.listdir(os.path.join('', 'dataset/annotations/trimaps'))))
 
-    def __getitem__(self, idx):
-        # load images ad masks
-        img_path    = os.path.join(self.root, "PNGImages", self.imgs[idx])
-        mask_path   = os.path.join(self.root, "PedMasks", self.masks[idx])
+    def __getitem__(self, idx):        
+        img_path    = os.path.join('', 'dataset/images', self.imgs[idx])
+        mask_path   = os.path.join('', 'dataset/annotations/trimaps', self.masks[idx])
+        
         img         = Image.open(img_path).convert("RGB")
+        mask        = Image.open(mask_path)
 
-        # note that we haven't converted the mask to RGB,
-        # because each color corresponds to a different instance
-        # with 0 being background
-        mask    = Image.open(mask_path)
+        img         = torch.FloatTensor(np.array(img))
+        img         = img.transpose(1, 2).transpose(0, 1)  
 
-        # convert the PIL Image into a numpy array
-        mask    = np.array(mask)
-
-        # instances are encoded as different colors
-        obj_ids = np.unique(mask)
-
-        # first id is the background, so remove it
-        obj_ids = obj_ids[1:]
-
-        # split the color-encoded mask into a set
-        # of binary masks
-        masks   = mask == obj_ids[:, None, None]
-
-        # there is only one class
-        masks   = torch.as_tensor(masks, dtype = torch.uint8)
+        masks       = torch.LongTensor(np.array(mask))
+        masks       = masks.unsqueeze(0)
 
         if self.transforms is not None:
-            img, masks = self.transforms(img, masks)
-
+            img     = self.transforms(img)
+            masks   = self.transforms(masks)
+        
+        masks = masks.argmax(0)
         return img, masks
 
     def __len__(self):
         return len(self.imgs)
 
-dataset     = PennFudanDataset('PennFudanPed')
-trainloader = torch.utils.data.DataLoader(dataset, batch_size = 2, shuffle = True, num_workers = 4)
+def display(img):
+    img = torchvision.utils.make_grid(img)
+    img = img.numpy()
+    plt.imshow(np.transpose(img, (1, 2, 0)))
+    plt.show()
 
-net         = Deeplabv4()
+transform = transforms.Compose([
+    transforms.Resize((128, 128)),
+    transforms.RandomHorizontalFlip(0.5)
+])
+
+dataset     = ImageDataset(transform)
+trainloader = torch.utils.data.DataLoader(dataset, batch_size = 4, shuffle = True, num_workers = 1)
+
+net         = Deeplabv4(num_classes = 3).to(device)
 criterion   = nn.CrossEntropyLoss()
-optimizer   = optim.SGD(net.parameters())
+optimizer   = optim.SGD(net.parameters(), lr = 0.001)
 
-for epoch in range(2):  # loop over the dataset multiple times
+for epoch in range(5):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
+        inputs = inputs.to(device)
+        labels = labels.to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # forward + backward + optimize
         outputs = net(inputs)
-        loss = criterion(outputs, labels)
+        loss    = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
         # print statistics
         running_loss += loss.item()
-        if i % 2000 == 1999:    # print every 2000 mini-batches
+        if i % 100 == 99:    # print every 2000 mini-batches
             print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
+                  (epoch + 1, i + 1, running_loss / 100))
             running_loss = 0.0
 
 print('Finished Training')
+
+PATH = './deeplabv4_net.pth'
+torch.save(net.state_dict(), PATH)
