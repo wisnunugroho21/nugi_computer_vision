@@ -7,7 +7,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
-from dataset.ImageDataset import ImageDataset
+from dataloader.PennFudanPedDataset import PennFudanPedDataset
 from model.deeplabv4 import Deeplabv4
 
 device  = torch.device('cuda:0')
@@ -24,21 +24,21 @@ def display(display_list, title):
     plt.show()
 
 transform1 = transforms.Compose([
-    transforms.Resize((128, 128))
+    transforms.Resize((256, 256))
 ])
 
 transform2 = transforms.Compose([
-    transforms.Resize((128, 128))
+    transforms.Resize((256, 256))
 ])
 
-dataset     = ImageDataset('dataset', transform1, transform2)
+dataset     = PennFudanPedDataset('dataset/PennFudanPed', transform1, transform2)
 trainloader = data.DataLoader(dataset, batch_size = 32, shuffle = True, num_workers = 1)
 
 net         = Deeplabv4(num_classes = 3).to(device)
 net.load_state_dict(torch.load(PATH))
 net.eval()
 
-inputs, labels = dataset[800]
+inputs, labels = dataset[20]
 inputs  = inputs.unsqueeze(0).to(device)
 labels = labels.to(device)
 

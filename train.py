@@ -6,30 +6,30 @@ import torch.optim as optim
 
 import torchvision.transforms as transforms
 
-from dataset.ImageDataset import ImageDataset
+from dataloader.PennFudanPedDataset import PennFudanPedDataset
 from model.deeplabv4 import Deeplabv4
 
 device      = torch.device('cuda:0')
 PATH        = 'weights/deeplabv4_net.pth'
 
 transform1  = transforms.Compose([
-    transforms.Resize((128, 128))
+    transforms.Resize((256, 256))
 ])
 transform2  = transforms.Compose([
-    transforms.Resize((128, 128))
+    transforms.Resize((256, 256))
 ])
 
-dataset     = ImageDataset('dataset', transform1, transform2)
-trainloader = data.DataLoader(dataset, batch_size = 16, shuffle = True, num_workers = 1)
+dataset     = PennFudanPedDataset('dataset/PennFudanPed', transform1, transform2)
+trainloader = data.DataLoader(dataset, batch_size = 4, shuffle = True, num_workers = 1)
 
 net         = Deeplabv4(num_classes = 3).to(device)
 net.train()
 
 criterion   = nn.CrossEntropyLoss()
-optimizer   = optim.Adam(net.parameters(), lr = 3e-4)
+optimizer   = optim.Adam(net.parameters(), lr = 0.001)
 scaler      = torch.cuda.amp.GradScaler()
 
-for epoch in range(25):
+for epoch in range(40):
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         inputs, labels = data
@@ -47,8 +47,8 @@ for epoch in range(25):
         scaler.update()
 
         running_loss += loss.item()
-        if i % 100 == 99:
-            print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 100))
+        if i % 10 == 9:
+            print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 10))
             running_loss = 0.0
 
 print('Finished Training')

@@ -17,7 +17,7 @@ class DepthwiseSeparableConv2d(nn.Module):
 
 class SpatialAtrousExtractor(nn.Module):
     def __init__(self, dim_in, dim_out, rate):
-        super(SpatialAtrousExtractor, self).__init__()
+        super(SpatialAtrousExtractor, self).__init__()        
 
         self.spatial_atrous = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = rate, dilation = rate, bias = False),            
@@ -46,12 +46,6 @@ class SpatialEncoder(nn.Module):
 
         self.bn = nn.BatchNorm2d(dim_out)
 
-        self.comb_extractor = nn.Sequential(            
-            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out)            
-        )
-
     def forward(self, x):
         x1 = self.extractor1(x)
         x2 = self.extractor1(x)
@@ -59,8 +53,6 @@ class SpatialEncoder(nn.Module):
         x4 = self.extractor1(x)
 
         xout = self.bn(x1 + x2 + x3 + x4)
-        xout = self.comb_extractor(xout)        
-
         return xout
 
 class DownsamplerEncoder(nn.Module):
@@ -80,11 +72,11 @@ class DownsamplerEncoder(nn.Module):
 
         self.bn = nn.BatchNorm2d(dim_out)
 
-    def forward(self, x):
+    def forward(self, x):        
         x1      = self.downsampler1(x)
         x2      = self.downsampler2(x)
-        xout    = self.bn(x1 + x2)
 
+        xout    = self.bn(x1 + x2)
         return xout
 
 class ExtractEncoder(nn.Module):
@@ -141,7 +133,10 @@ class Deeplabv4(nn.Module):
         self.enc8 = DownsamplerEncoder(256, 256) 
 
         self.back_channel_extractor = nn.Sequential(
-            DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1, bias = False),
+            DepthwiseSeparableConv2d(256, 16, kernel_size = 3, stride = 1, padding = 1, bias = False),
+            nn.ReLU(),
+            nn.BatchNorm2d(16),
+            DepthwiseSeparableConv2d(16, num_classes, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU(),
             nn.BatchNorm2d(num_classes)
         )
