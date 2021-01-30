@@ -32,18 +32,11 @@ class SpatialAtrousExtractor(nn.Module):
 
         self.spatial_atrous = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = rate, dilation = rate, bias = False),            
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_in)
-		)
-
-        self.conv1  = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU()
-        )
-        self.bn1    = nn.BatchNorm2d(dim_out)
-
-        self.conv2  = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
+		)
+        self.conv1  = nn.Sequential(
+            nn.BatchNorm2d(dim_in),
+            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU()
         )
 
@@ -52,12 +45,8 @@ class SpatialAtrousExtractor(nn.Module):
 
         x1 = self.conv1(x)
         x1 = x + x1
-        x1 = self.bn1(x1)
 
-        x2 = self.conv2(x1)
-        x2 = x1 + x2
-
-        return x2
+        return x1
 
 class SpatialEncoder(nn.Module):
     def __init__(self, dim_in, dim_out):
@@ -82,23 +71,15 @@ class SpatialEncoder(nn.Module):
             nn.BatchNorm2d(dim_out)            
         )
 
-        self.downsampler = nn.Sequential(            
-            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out)            
-        )
-
     def forward(self, x):
         x1 = self.extractor1(x)
         x2 = self.extractor1(x)
         x3 = self.extractor1(x)
         x4 = self.extractor1(x)
 
-        xout = x1 + x2 + x3 + x4
-        xout = self.bn(xout)
+        xout = self.bn(x1 + x2 + x3 + x4)
         xout = self.comb_extractor(xout)
         xout = self.change_channel_extractor(xout)
-        xout = self.downsampler(xout)
 
         return xout
 
@@ -106,28 +87,24 @@ class DownsamplerEncoder(nn.Module):
     def __init__(self, dim_in, dim_out):
         super(DownsamplerEncoder, self).__init__()
 
-        self.downsampler1 = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
+        self.downsampler1 = nn.Sequential(            
+            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU(),
-            nn.BatchNorm2d(dim_in),
+            nn.MaxPool2d(2)
+        )
+        self.downsampler2 = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out)
+            nn.ReLU()
         )
 
-        self.downsampler2 = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_in),
-            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out)
-        )
+        self.bn = nn.BatchNorm2d(dim_out)
 
     def forward(self, x):
         x1 = self.downsampler1(x)
         x2 = self.downsampler2(x)
-        return x1 + x2
+        xout   = self.bn(x1 + x2)
+
+        return xout
 
 class ExtractEncoder(nn.Module):
     def __init__(self, dim_in, dim_out):
@@ -138,25 +115,26 @@ class ExtractEncoder(nn.Module):
             nn.ReLU(),
             nn.BatchNorm2d(dim_in),
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_in)            
+            nn.ReLU(),                    
         )
 
         self.conv2 = nn.Sequential(
+            nn.BatchNorm2d(dim_in),
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ReLU(),
             nn.BatchNorm2d(dim_out),
             DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out)
+            nn.ReLU()
         )
+
+        self.bn = nn.BatchNorm2d(dim_out)
 
     def forward(self, x):
         x1 = self.conv1(x)
         x1 = x + x1
 
         x2 = self.conv2(x1)
-        x2 = x1 + x2
+        x2 = self.bn(x1 + x2)
 
         return x2
 
@@ -172,6 +150,8 @@ class Deeplabv4(nn.Module):
         self.enc4 = ExtractEncoder(256, 256)
         self.enc5 = DownsamplerEncoder(256, 256)
         self.enc6 = ExtractEncoder(256, 256)
+        self.enc7 = DownsamplerEncoder(256, 256)
+        self.enc8 = ExtractEncoder(256, 256)
 
         self.back_channel_extractor = nn.Sequential(
             DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1),
@@ -182,16 +162,16 @@ class Deeplabv4(nn.Module):
         self.upsample1          = nn.UpsamplingBilinear2d(scale_factor = 4)
         self.upsample_conv_1    = nn.Sequential(
             DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(num_classes)
+            nn.ReLU()
         )
+        self.bn1 = nn.BatchNorm2d(num_classes)
 
         self.upsample2          = nn.UpsamplingBilinear2d(scale_factor = 4)
         self.upsample_conv_2    = nn.Sequential(
             DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(num_classes)
+            nn.ReLU()
         )
+        self.bn2 = nn.BatchNorm2d(num_classes)
 
     def forward(self, x):
         x   = self.spatialenc(x)
@@ -202,16 +182,18 @@ class Deeplabv4(nn.Module):
         x   = self.enc4(x)
         x   = self.enc5(x)
         x   = self.enc6(x)
+        x   = self.enc7(x)
+        x   = self.enc8(x)
 
         x   = self.back_channel_extractor(x)
 
         x   = self.upsample1(x)
         x1  = self.upsample_conv_1(x)
-        x1  = x + x1
+        x1  = self.bn1(x + x1)
 
         x1  = self.upsample2(x1)
         x2  = self.upsample_conv_2(x1)
-        x2  = x1 + x2
+        x2  = self.bn2(x1 + x2)
 
         return x2
 
@@ -262,7 +244,7 @@ transform2 = transforms.Compose([
 ])
 
 dataset     = ImageDataset(transform1, transform2)
-trainloader = data.DataLoader(dataset, batch_size = 64, shuffle = True, num_workers = 1)
+trainloader = data.DataLoader(dataset, batch_size = 32, shuffle = True, num_workers = 1)
 
 net         = Deeplabv4(num_classes = 3).to(device)
 criterion   = nn.CrossEntropyLoss()
@@ -270,7 +252,7 @@ optimizer   = optim.Adam(net.parameters(), lr = 3e-4)
 
 scaler      = torch.cuda.amp.GradScaler()
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(25):  # loop over the dataset multiple times
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
