@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.data as data
 import torch.optim as optim
+import torch.utils.data as data
 
 import torchvision
 import torchvision.transforms as transforms
@@ -13,6 +13,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 device = torch.device('cuda:0')
+PATH = './deeplabv4_net.pth'
 
 class DepthwiseSeparableConv2d(nn.Module):
     def __init__(self, nin, nout, kernel_size = 3, stride = 1, padding = 0, dilation = 1, bias = False, depth_multiplier = 1):
@@ -247,14 +248,14 @@ class ImageDataset(data.Dataset):
     def __len__(self):
         return len(self.imgs)
 
-def display(img):
-    img = torchvision.utils.make_grid(img)
-    img = img.numpy()
-    plt.imshow(np.transpose(img, (1, 2, 0)))
+def display(disImg):
+    disImg = disImg.detach().numpy()
+    plt.imshow(disImg)
     plt.show()
 
 transform1 = transforms.Compose([
-    transforms.Resize((128, 128))
+    transforms.Resize((128, 128)),
+    transforms.ToTensor()
 ])
 
 transform2 = transforms.Compose([
@@ -265,48 +266,16 @@ dataset     = ImageDataset(transform1, transform2)
 trainloader = data.DataLoader(dataset, batch_size = 64, shuffle = True, num_workers = 1)
 
 net         = Deeplabv4(num_classes = 3).to(device)
-criterion   = nn.CrossEntropyLoss()
-optimizer   = optim.Adam(net.parameters(), lr = 3e-4)
+net.load_state_dict(torch.load(PATH))
+net.eval()
 
-scaler      = torch.cuda.amp.GradScaler()
+inputs, labels = dataset[0]
+inputs = inputs.unsqueeze(0).to(device)
 
-for epoch in range(10):  # loop over the dataset multiple times
-    running_loss = 0.0
-    for i, data in enumerate(trainloader, 0):
-        # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = data
-        inputs = inputs.to(device)
-        labels = labels.to(device)
+outputs = net(inputs)
+z = inputs[0].transpose(0, 1).transpose(1, 2)
+display(z.cpu())
 
-        # zero the parameter gradients
-        optimizer.zero_grad()
-
-        # forward + backward + optimize
-        # Casts operations to mixed precision
-        with torch.cuda.amp.autocast():
-            outputs = net(inputs)
-            loss    = criterion(outputs, labels)
-
-        # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
-        # Backward passes under autocast are not recommended.
-        # Backward ops run in the same dtype autocast chose for corresponding forward ops.
-        scaler.scale(loss).backward()
-
-        # scaler.step() first unscales the gradients of the optimizer's assigned params.
-        # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-        # otherwise, optimizer.step() is skipped.
-        scaler.step(optimizer)
-
-        # Updates the scale for next iteration.
-        scaler.update()
-
-        # print statistics
-        running_loss += loss.item()
-        if i % 100 == 99:    # print every 2000 mini-batches
-            print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 100))
-            running_loss = 0.0
-
-print('Finished Training')
-
-PATH = './deeplabv4_net.pth'
-torch.save(net.state_dict(), PATH)
+x = nn.functional.softmax(outputs[0], 0)
+x = x.argmax(0)
+display(x.cpu())
