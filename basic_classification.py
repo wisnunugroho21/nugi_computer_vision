@@ -45,25 +45,32 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
 
-        self.conv_net = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size = 4, stride = 2, padding = 1),
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 8, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),                       
+        )        
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(8, 32, kernel_size = 8, stride = 4, padding = 2),
+            nn.ReLU(),
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size = 4, stride = 2, padding = 1),
             nn.ReLU(),
             nn.Conv2d(16, 32, kernel_size = 4, stride = 2, padding = 1),
             nn.ReLU(),
+        )
+
+        self.conv4 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size = 4, stride = 2, padding = 1),
-            nn.ReLU(),            
-        )
-
-        self.linear = nn.Sequential(
-            nn.Linear(1024, 64),
             nn.ReLU(),
-        )
-
+        )      
+        
         self.class_net = nn.Sequential(
             nn.Linear(64, 32),
             nn.ReLU(),
-            nn.Linear(32, 10),
-            nn.ReLU(),
+            nn.Linear(32, 10)
         )
 
         self.project_net = nn.Sequential(
@@ -73,18 +80,22 @@ class Net(nn.Module):
         )
 
     def forward(self, x):
-        x = self.conv_net(x)
-        x = x.reshape(-1, 64 * 4 * 4)
-        x = self.linear(x)
-        return self.class_net(x), self.project_net(x)
+        x1 = self.conv1(x)
+        x2 = self.conv2(x1)
+        x3 = self.conv3(x1)
+        x23 = x2 + x3
+        x4 = self.conv4(x23)
+        x4 = x4.mean([2, 3])
+        return self.class_net(x4), self.project_net(x4)
 
 def clrloss(first_encoded, second_encoded):
-    zeros       = torch.zeros(first_encoded.shape[0] + second_encoded.shape[0]).long().to(device)
+    first_encoded   = ((first_encoded - first_encoded.mean()) / (first_encoded.std() + 1e-6))
+    second_encoded  = ((second_encoded - second_encoded.mean()) / (second_encoded.std() + 1e-6))
 
-    # first_encoded   = ((first_encoded - first_encoded.mean()) / (first_encoded.std() + 1e-6))
-    # second_encoded  = ((second_encoded - second_encoded.mean()) / (second_encoded.std() + 1e-6))
-    encoded     = torch.cat((first_encoded, second_encoded), dim = 0)
-    similarity  = torch.nn.functional.cosine_similarity(encoded.unsqueeze(1), encoded.unsqueeze(0), dim = 2)
+    encoded         = torch.cat((first_encoded, second_encoded), dim = 0)
+    zeros           = torch.zeros(encoded.shape[0]).long().to(device)    
+    
+    similarity      = torch.nn.functional.cosine_similarity(encoded.unsqueeze(1), encoded.unsqueeze(0), dim = 2)
     return torch.nn.functional.cross_entropy(similarity, zeros)
 
 net = Net()
@@ -95,7 +106,7 @@ import torch.optim as optim
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(net.parameters(), lr = 0.001)
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(25):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for data in trainloader:
@@ -117,42 +128,33 @@ for epoch in range(10):  # loop over the dataset multiple times
 
     print('loop clr -> ', epoch)
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(20):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data
-        inputs = inputs.to(device)
-        labels = labels.to(device)
+        inputs, labels = inputs.to(device), labels.to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # forward + backward + optimize
         outputs, _ = net(inputs)
-        loss = criterion(outputs, labels)
+        loss  = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
         # print statistics
         running_loss += loss.item()
         if i % 2000 == 1999:    # print every 2000 mini-batches
-            print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
+            print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
             running_loss = 0.0
 
 print('Finished Training')
 
 PATH = './cifar_net.pth'
 torch.save(net.state_dict(), PATH)
-
-dataiter = iter(testloader)
-images, labels = dataiter.next()
-
-# print images
-imshow(torchvision.utils.make_grid(images))
-print('GroundTruth: ', ' '.join('%5s' % classes[labels[j]] for j in range(4)))
 
 net = Net()
 net.to(device)
@@ -163,13 +165,12 @@ total = 0
 with torch.no_grad():
     for data in testloader:
         images, labels = data
-        images = images.to(device)
-        labels = labels.to(device)
+        images, labels = images.to(device), labels.to(device)
 
-        outputs, _ = net(images)
-        _, predicted = torch.max(outputs.data, 1)
-        total += labels.size(0)
+        outputs, _  = net(images)
+        predicted   = torch.argmax(outputs, 1)
+
+        total   += labels.size(0)
         correct += (predicted == labels).sum().item()
 
-print('Accuracy of the network on the 10000 test images: %d %%' % (
-    100 * correct / total))
+print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
