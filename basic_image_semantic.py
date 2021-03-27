@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 
-from dataloader.DogBreedDataset import DogBreedDataset
+from dataloader.CatsDataset import CatsDataset
 from loss.simclr import SimCLR
 from model.image_semantic.encoder import Encoder
 from model.image_semantic.decoder import Decoder
@@ -34,16 +34,16 @@ trans2 = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-trainset    = DogBreedDataset(root = '', transforms = trans0)
+trainset    = CatsDataset(root = '', transforms1 = trans0)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = False, num_workers = 2)
 
-clrset1     = DogBreedDataset(root = '', transform = trans1)
+clrset1     = CatsDataset(root = '', transforms1 = trans1)
 clrloader1  = torch.utils.data.DataLoader(clrset1, batch_size = 8, shuffle = False, num_workers = 2)
 
-clrset2     = DogBreedDataset(root = '', transform = trans2)
+clrset2     = CatsDataset(root = '', transforms1 = trans2)
 clrloader2  = torch.utils.data.DataLoader(clrset2, batch_size = 8, shuffle = False, num_workers = 2)
 
-testset     = DogBreedDataset(root = '', transform = trans0)
+testset     = CatsDataset(root = '', transforms1 = trans0)
 testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 2)
 
 encoder     = Encoder()
@@ -117,8 +117,8 @@ with torch.no_grad():
         images, labels = data
         images, labels = images.to(device), labels.to(device)
 
-        mid         = encoder(input)
-        out         = decoder(mid)
+        mid = encoder(input)
+        out = decoder(mid)
 
         total   += labels.size(0)
         correct += (out == labels).sum().item()

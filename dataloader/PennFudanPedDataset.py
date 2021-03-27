@@ -26,10 +26,7 @@ class PennFudanPedDataset(data.Dataset):
 
         if self.transforms2 is not None:    
             masks   = self.transforms2(masks)
-        
-        img     = torch.FloatTensor(np.array(img))
-        img     = img.transpose(1, 2).transpose(0, 1) / 255.0
-        
+                
         masks   = torch.LongTensor(np.array(masks))
         masks[masks > 0] = 1.0
 
