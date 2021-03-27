@@ -42,16 +42,16 @@ trans_label  = transforms.Compose([
 ])
 
 trainset    = CatsDataset(root = 'dataset/cats', transforms1 = trans0, transforms2 = trans_label)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = False, num_workers = 2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = False, num_workers = 8)
 
 clrset1     = CatsDataset(root = 'dataset/cats', transforms1 = trans1, transforms2 = trans_label)
-clrloader1  = torch.utils.data.DataLoader(clrset1, batch_size = 8, shuffle = False, num_workers = 2)
+clrloader1  = torch.utils.data.DataLoader(clrset1, batch_size = 8, shuffle = False, num_workers = 8)
 
 clrset2     = CatsDataset(root = 'dataset/cats', transforms1 = trans2, transforms2 = trans_label)
-clrloader2  = torch.utils.data.DataLoader(clrset2, batch_size = 8, shuffle = False, num_workers = 2)
+clrloader2  = torch.utils.data.DataLoader(clrset2, batch_size = 8, shuffle = False, num_workers = 8)
 
 testset     = CatsDataset(root = 'dataset/cats', transforms1 = trans0, transforms2 = trans_label)
-testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 2)
+testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 8)
 
 encoder     = Encoder()
 projector   = Projection()
@@ -59,9 +59,10 @@ projector   = Projection()
 encoder, projector = encoder.to(device), projector.to(device)
 
 clroptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(projector.parameters()), lr = 0.001)
+clrscaler       = torch.cuda.amp.GradScaler()
 clrloss         = SimCLR(True)
 
-for epoch in range(1):
+for epoch in range(5):
     running_loss = 0.0
     for data1, data2 in zip(clrloader1, clrloader2):
         input1, _   = data1        
@@ -71,15 +72,17 @@ for epoch in range(1):
 
         clroptimizer.zero_grad()
 
-        mid1   = encoder(input1).mean([2, 3])
-        out1   = projector(mid1)
+        with torch.cuda.amp.autocast():
+            mid1   = encoder(input1).mean([2, 3])
+            out1   = projector(mid1)
 
-        mid2   = encoder(input2).mean([2, 3])
-        out2   = projector(mid2)
+            mid2   = encoder(input2).mean([2, 3])
+            out2   = projector(mid2)
 
-        loss = clrloss.compute_loss(out1, out2)
-        loss.backward()
-        clroptimizer.step()
+            loss = clrloss.compute_loss(out1, out2)
+        clrscaler.scale(loss).backward()
+        clrscaler.step(clroptimizer)
+        clrscaler.update()
 
     print('loop clr -> ', epoch)
 
@@ -90,9 +93,10 @@ decoder = Decoder()
 decoder = decoder.to(device)
 
 segoptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr = 0.001)
+segscaler       = torch.cuda.amp.GradScaler()
 segloss         = nn.CrossEntropyLoss()
 
-for epoch in range(1):
+for epoch in range(5):
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         input, label    = data
@@ -100,12 +104,15 @@ for epoch in range(1):
 
         segoptimizer.zero_grad()
 
-        mid = encoder(input)
-        out = decoder(mid)
+        with torch.cuda.amp.autocast():
+            mid = encoder(input)
+            out = decoder(mid)
 
-        loss = segloss(out, label)
-        loss.backward()
-        segoptimizer.step()
+            loss = segloss(out, label)
+
+        segscaler.scale(loss).backward()
+        segscaler.step(segoptimizer)
+        segscaler.update()
 
         running_loss += loss.item()
         if i % 100 == 99:
@@ -126,9 +133,10 @@ with torch.no_grad():
 
         mid = encoder(input)
         out = decoder(mid)
+        predicted = torch.argmax(out, -1)
 
-        total   += labels.size(0)
-        correct += (out == labels).sum().item()
+        total   += labels.size(0)        
+        correct += (predicted == labels).sum().item()
 
 print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
 
