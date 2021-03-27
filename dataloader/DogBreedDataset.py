@@ -25,8 +25,8 @@ class DogBreedDataset(data.Dataset):
         if self.transforms is not None:
             img = self.transforms(img)
         
-        img     = torch.FloatTensor(np.array(img))
-        img     = img.transpose(1, 2).transpose(0, 1) / 255.0
+        # img     = torch.FloatTensor(np.array(img))
+        # img     = img.transpose(1, 2).transpose(0, 1) / 255.0
 
         label = self.labels[idx]
         return img, label
