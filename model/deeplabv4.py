@@ -20,8 +20,7 @@ class SpatialAtrousExtractor(nn.Module):
         super(SpatialAtrousExtractor, self).__init__()        
 
         self.spatial_atrous = nn.Sequential(
-            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = rate, dilation = rate, bias = False),            
-            nn.ReLU()
+            nn.Conv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = rate, dilation = rate)
 		)
 
     def forward(self, x):
@@ -34,22 +33,18 @@ class SpatialEncoder(nn.Module):
 
         self.extractor1 = SpatialAtrousExtractor(dim_in, dim_mid, 0)
         self.extractor2 = SpatialAtrousExtractor(dim_in, dim_mid, 2)
-        self.extractor3 = SpatialAtrousExtractor(dim_in, dim_mid, 8)
-        self.extractor4 = SpatialAtrousExtractor(dim_in, dim_mid, 16)
+        self.extractor3 = SpatialAtrousExtractor(dim_in, dim_mid, 6)
 
         self.out = nn.Sequential(
-            DepthwiseSeparableConv2d(4 * dim_mid, dim_out, kernel_size = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim_out),
+            nn.Conv2d(3 * dim_mid, dim_out, kernel_size = 1)
         )
 
     def forward(self, x):
         x1 = self.extractor1(x)
-        x2 = self.extractor1(x)
-        x3 = self.extractor1(x)
-        x4 = self.extractor1(x)      
+        x2 = self.extractor2(x)
+        x3 = self.extractor3(x) 
 
-        xout = torch.cat((x1, x2, x3, x4), 1)
+        xout = torch.cat((x1, x2, x3), 1)
         xout = self.out(xout)
 
         return xout
@@ -100,47 +95,27 @@ class ExtractEncoder(nn.Module):
 
     def forward(self, x):
         x1 = self.conv1(x)
-        x1 = x + x1
+        x1 = self.bn(x + x1)
 
         x2 = self.conv2(x1)
         x2 = self.bn(x1 + x2)
 
         return x2
 
-class Deeplabv4(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, num_classes = 3):
-        super(Deeplabv4, self).__init__()
+        super(Encoder, self).__init__()
 
-        self.spatialenc = SpatialEncoder(3, 16, 256)
+        self.spatialenc = SpatialEncoder(3, 3, 64)
 
-        self.enc1 = ExtractEncoder(256, 256)
-        self.enc2 = ExtractEncoder(256, 256)
-        self.enc3 = DownsamplerEncoder(256, 256)
-        self.enc4 = ExtractEncoder(256, 256)
-        self.enc5 = ExtractEncoder(256, 256)
-        self.enc6 = DownsamplerEncoder(256, 256)
+        self.enc1 = ExtractEncoder(64, 64)
+        self.enc2 = ExtractEncoder(64, 64)
+        self.enc3 = DownsamplerEncoder(64, 128)
+        self.enc4 = ExtractEncoder(128, 128)
+        self.enc5 = ExtractEncoder(128, 128)
+        self.enc6 = DownsamplerEncoder(128, 256)
         self.enc7 = ExtractEncoder(256, 256)
-        self.enc8 = ExtractEncoder(256, 256)       
-
-        self.back_channel_extractor = nn.Sequential(
-            DepthwiseSeparableConv2d(256, 16, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            DepthwiseSeparableConv2d(16, num_classes, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
-            nn.BatchNorm2d(num_classes),
-        )
-
-        self.upsample1          = nn.UpsamplingBilinear2d(scale_factor = 4)
-        self.upsample_conv_1    = nn.Sequential(
-            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1, bias = True),
-            nn.ReLU()
-        )
-
-        self.upsample2          = nn.UpsamplingBilinear2d(scale_factor = 4)
-        self.upsample_conv_2    = nn.Sequential(
-            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1, bias = True),
-            nn.ReLU()
-        )
+        self.enc8 = ExtractEncoder(256, 256)
 
     def forward(self, x):
         x   = self.spatialenc(x)
@@ -154,14 +129,35 @@ class Deeplabv4(nn.Module):
         x   = self.enc7(x)
         x   = self.enc8(x)
 
+        return x
+
+class Decoder(nn.Module):
+    def __init__(self, num_classes = 3):
+        super(Decoder, self).__init__()       
+
+        self.back_channel_extractor = nn.Sequential(
+            DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+        )
+
+        self.upsample1  = nn.Sequential(
+            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
+            nn.ReLU()
+        )
+
+        self.upsample2  = nn.Sequential(
+            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
+            nn.ReLU()
+        )
+
+    def forward(self, x):
         x   = self.back_channel_extractor(x)
 
-        x   = self.upsample1(x)
-        x1  = self.upsample_conv_1(x)
-        x1  = x + x1
-        
-        x1  = self.upsample2(x1)
-        x2  = self.upsample_conv_2(x1)
-        x2  = x1 + x2
+        x   = self.upsample1(x)        
+        x   = self.upsample2(x)
 
-        return x2
+        return x
