@@ -5,9 +5,9 @@ class Projection(nn.Module):
       super(Projection, self).__init__()
 
       self.nn_layer   = nn.Sequential(
-        nn.Linear(128, 128),
+        nn.Linear(256, 256),
         nn.ReLU(),
-        nn.Linear(128, 128),
+        nn.Linear(256, 128),
         nn.ReLU(),
         nn.Linear(128, 128)
       )

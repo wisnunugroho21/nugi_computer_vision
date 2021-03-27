@@ -6,7 +6,7 @@ class DownsamplerEncoder(nn.Module):
         super(DownsamplerEncoder, self).__init__()
 
         self.downsampler1 = nn.Sequential(            
-            DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
+            DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 4, stride = 2, padding = 1, bias = False),
             nn.ReLU(),
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, bias = False),
             nn.ReLU()

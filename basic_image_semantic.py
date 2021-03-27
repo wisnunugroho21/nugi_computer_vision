@@ -12,38 +12,45 @@ PATH = '.'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 trans0 = transforms.Compose([
+    transforms.Resize((256, 256)),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
 trans1 = transforms.Compose([
-    transforms.RandomResizedCrop(320),                           
+    transforms.Resize((256, 256)),
+    transforms.RandomResizedCrop(256),                           
     transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p = 0.8),
     transforms.RandomGrayscale(p = 0.2),
-    transforms.GaussianBlur(33),
+    transforms.GaussianBlur(25),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-trans2 = transforms.Compose([    
-    transforms.RandomResizedCrop(320),                           
+trans2 = transforms.Compose([
+    transforms.Resize((256, 256)),    
+    transforms.RandomResizedCrop(256),                           
     transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p = 0.8),
     transforms.RandomGrayscale(p = 0.2),
-    transforms.GaussianBlur(33),
+    transforms.GaussianBlur(25),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-trainset    = CatsDataset(root = '', transforms1 = trans0)
+trans_label  = transforms.Compose([
+    transforms.Resize((256, 256))
+])
+
+trainset    = CatsDataset(root = 'dataset/cats', transforms1 = trans0, transforms2 = trans_label)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = False, num_workers = 2)
 
-clrset1     = CatsDataset(root = '', transforms1 = trans1)
+clrset1     = CatsDataset(root = 'dataset/cats', transforms1 = trans1, transforms2 = trans_label)
 clrloader1  = torch.utils.data.DataLoader(clrset1, batch_size = 8, shuffle = False, num_workers = 2)
 
-clrset2     = CatsDataset(root = '', transforms1 = trans2)
+clrset2     = CatsDataset(root = 'dataset/cats', transforms1 = trans2, transforms2 = trans_label)
 clrloader2  = torch.utils.data.DataLoader(clrset2, batch_size = 8, shuffle = False, num_workers = 2)
 
-testset     = CatsDataset(root = '', transforms1 = trans0)
+testset     = CatsDataset(root = 'dataset/cats', transforms1 = trans0, transforms2 = trans_label)
 testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 2)
 
 encoder     = Encoder()
@@ -52,9 +59,9 @@ projector   = Projection()
 encoder, projector = encoder.to(device), projector.to(device)
 
 clroptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(projector.parameters()), lr = 0.001)
-clrloss         = SimCLR()
+clrloss         = SimCLR(True)
 
-for epoch in range(20):
+for epoch in range(1):
     running_loss = 0.0
     for data1, data2 in zip(clrloader1, clrloader2):
         input1, _   = data1        
@@ -64,10 +71,10 @@ for epoch in range(20):
 
         clroptimizer.zero_grad()
 
-        mid1   = encoder(input1)
+        mid1   = encoder(input1).mean([2, 3])
         out1   = projector(mid1)
 
-        mid2   = encoder(input2)
+        mid2   = encoder(input2).mean([2, 3])
         out2   = projector(mid2)
 
         loss = clrloss.compute_loss(out1, out2)
@@ -85,7 +92,7 @@ decoder = decoder.to(device)
 segoptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr = 0.001)
 segloss         = nn.CrossEntropyLoss()
 
-for epoch in range(20):
+for epoch in range(1):
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         input, label    = data
@@ -101,14 +108,14 @@ for epoch in range(20):
         segoptimizer.step()
 
         running_loss += loss.item()
-        if i % 10 == 9:
+        if i % 100 == 99:
             print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 10))
             running_loss = 0.0
 
 print('Finished Training')
 
 torch.save(encoder.state_dict(), PATH + '/encoder.pth')
-torch.save(encoder.state_dict(), PATH + '/decoder.pth')
+torch.save(decoder.state_dict(), PATH + '/decoder.pth')
 
 correct = 0
 total = 0
@@ -124,3 +131,6 @@ with torch.no_grad():
         correct += (out == labels).sum().item()
 
 print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
+
+torch.save(encoder.state_dict(), PATH + '/encoder.pth')
+torch.save(decoder.state_dict(), PATH + '/decoder.pth')
