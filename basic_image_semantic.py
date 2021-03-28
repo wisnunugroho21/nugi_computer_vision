@@ -79,7 +79,7 @@ for epoch in range(5):
             mid2   = encoder(input2).mean([2, 3])
             out2   = projector(mid2)
 
-            loss = clrloss.compute_loss(out1, out2)
+            loss = (clrloss.compute_loss(out1, out2) + clrloss.compute_loss(out2, out1)) / 2.0
         clrscaler.scale(loss).backward()
         clrscaler.step(clroptimizer)
         clrscaler.update()
