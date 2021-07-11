@@ -7,21 +7,21 @@ class Decoder(nn.Module):
 
         self.back_channel_extractor = nn.Sequential(
             DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ReLU(),
+            nn.ELU(),
         )
 
         self.upsample1  = nn.Sequential(
             nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ReLU(),
+            nn.ELU(),
             nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ReLU()
+            nn.ELU()
         )
 
         self.upsample2  = nn.Sequential(
             nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ReLU(),
+            nn.ELU(),
             nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ReLU()
+            nn.ELU()
         )
 
     def forward(self, x):

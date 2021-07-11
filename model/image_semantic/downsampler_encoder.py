@@ -16,7 +16,7 @@ class DownsamplerEncoder(nn.Module):
 
         self.out = nn.Sequential(
             nn.Conv2d(2 * dim_in, dim_out, kernel_size = 1),
-            nn.ReLU()
+            nn.ELU()
         )
 
     def forward(self, x):        

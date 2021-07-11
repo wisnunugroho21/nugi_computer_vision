@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from dataloader.PennFudanPedDataset import PennFudanPedDataset
 from dataloader.ClrPennFudanPedDataset import ClrPennFudanPedDataset
 
-from loss.simclr import SimCLR
+from loss.cmm import ContrastiveMM
 from model.image_semantic.encoder import Encoder
 from model.image_semantic.decoder import Decoder
 from model.clr.projection import Projection
@@ -25,13 +25,7 @@ def display(display_list, title):
 PATH = '.'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-trans0 = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-
-trans1 = transforms.Compose([
+trans_clr1 = transforms.Compose([
     transforms.Resize((256, 256)),
     transforms.RandomResizedCrop(256),                           
     transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p = 0.8),
@@ -41,7 +35,13 @@ trans1 = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-trans2 = transforms.Compose([
+trans_clr2 = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+])
+
+trans_input = transforms.Compose([
     transforms.Resize((256, 256)),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -51,34 +51,28 @@ trans_label  = transforms.Compose([
     transforms.Resize((256, 256))
 ])
 
-clrset      = ClrPennFudanPedDataset(root = 'drive/My Drive/datasets/dataset', transforms1 = trans1, transforms2 = trans2)
-clrloader   = torch.utils.data.DataLoader(clrset, batch_size = 16, shuffle = True, num_workers = 2)
+clrset      = ClrPennFudanPedDataset(root = 'dataset', transforms1 = trans_clr1, transforms2 = trans_clr2)
+clrloader   = torch.utils.data.DataLoader(clrset, batch_size = 8, shuffle = True, num_workers = 8)
 
-trainset    = PennFudanPedDataset(root = 'drive/My Drive/datasets/dataset', transforms1 = trans0, transforms2 = trans_label)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size = 16, shuffle = True, num_workers = 2)
+trainset    = PennFudanPedDataset(root = 'dataset', transforms1 = trans_input, transforms2 = trans_label)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = True, num_workers = 8)
 
-testset     = PennFudanPedDataset(root = 'drive/My Drive/datasets/dataset', transforms1 = trans0, transforms2 = trans_label)
-testloader  = torch.utils.data.DataLoader(testset, batch_size = 16, shuffle = False, num_workers = 2)
+testset     = PennFudanPedDataset(root = 'dataset', transforms1 = trans_input, transforms2 = trans_label)
+testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 8)
 
-encoder     = Encoder()
-projector   = Projection()
-
-encoder1     = Encoder()
-projector1   = Projection()
+encoder, encoder1     = Encoder(), Encoder()
+projector, projector1 = Projection(), Projection()
 
 encoder, projector    = encoder.to(device), projector.to(device)
 encoder1, projector1  = encoder1.to(device), projector1.to(device)
 
-encoder1.load_state_dict(encoder1.state_dict())
-projector1.load_state_dict(projector1.state_dict())
-
 clroptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(projector.parameters()), lr = 0.001)
 clrscaler       = torch.cuda.amp.GradScaler()
-clrloss         = SimCLR()
+clrloss         = ContrastiveMM(True)
 
-for epoch in range(1):
+for epoch in range(50):
     running_loss = 0.0
-    for data in clrloader:
+    for i, data in enumerate(clrloader, 0):
         input1, input2  = data
         input1, input2  = input1.to(device), input2.to(device)
 
@@ -94,23 +88,25 @@ for epoch in range(1):
 
         clrscaler.scale(loss).backward()
         clrscaler.step(clroptimizer)
-        clrscaler.update()
+        clrscaler.update()        
 
-    print('loop clr -> ', epoch)
+        print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, loss.item()))
+
+    print('loop clr -> ', epoch + 1)
 
 print('Finished Pre-Training')
 torch.save(encoder.state_dict(), PATH + '/encoder.pth')
 
 # -----------------------------------------------------------------------------------------------------------
 
-decoder = Decoder(2)
+decoder = Decoder(num_classes = 2)
 decoder = decoder.to(device)
 
 segoptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr = 0.001)
 segscaler       = torch.cuda.amp.GradScaler()
 segloss         = nn.CrossEntropyLoss()
 
-for epoch in range(1):
+for epoch in range(50):
     for i, data in enumerate(trainloader, 0):
         images, labels    = data
         images, labels    = images.to(device), labels.to(device)
@@ -130,6 +126,8 @@ for epoch in range(1):
 
 print('Finished Training')
 
+# -------------------------------------------------------------------
+
 torch.save(encoder.state_dict(), PATH + '/encoder.pth')
 torch.save(decoder.state_dict(), PATH + '/decoder.pth')
 
@@ -143,8 +141,10 @@ with torch.no_grad():
         mid = encoder(images)
         out = decoder(mid)
 
+        out = out.transpose(1, 2).transpose(2, 3).argmax(-1)
+
         total   += (labels.shape[0] * labels.shape[1] * labels.shape[2])
-        correct += (out.argmax(1) == labels).sum().item()
+        correct += (out == labels).sum().item()
 
 print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
 
@@ -154,6 +154,34 @@ torch.save(decoder.state_dict(), PATH + '/decoder.pth')
 # -------------------------------------------------------------------
 
 images, labels  = testset[0]
+images          = images.unsqueeze(0)
+images, labels  = images.to(device), labels.to(device)
+
+mid = encoder(images)
+out = decoder(mid)
+
+disInput    = images.squeeze(0).transpose(0, 1).transpose(1, 2)
+disOutput   = out.squeeze(0).transpose(0, 1).transpose(1, 2).argmax(-1)
+
+display([disInput.cpu(), labels.cpu(), disOutput.cpu()], ['Input Image', 'True Mask', 'Predicted Mask'])
+
+# -----------------------------------------------------------------------------
+
+images, labels  = testset[10]
+images          = images.unsqueeze(0)
+images, labels  = images.to(device), labels.to(device)
+
+mid = encoder(images)
+out = decoder(mid)
+
+disInput    = images.squeeze(0).transpose(0, 1).transpose(1, 2)
+disOutput   = out.squeeze(0).transpose(0, 1).transpose(1, 2).argmax(-1)
+
+display([disInput.cpu(), labels.cpu(), disOutput.cpu()], ['Input Image', 'True Mask', 'Predicted Mask'])
+
+# ----------------------------------------------------------------------------------
+
+images, labels  = testset[14]
 images          = images.unsqueeze(0)
 images, labels  = images.to(device), labels.to(device)
 
