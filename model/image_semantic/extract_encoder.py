@@ -7,25 +7,23 @@ class ExtractEncoder(nn.Module):
 
         self.conv1 = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
+            nn.ELU(),
             DepthwiseSeparableConv2d(dim_in, dim_in, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),                    
+            nn.ELU(),                    
         )
 
         self.conv2 = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU(),
+            nn.ELU(),
             DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ReLU()
+            nn.ELU()
         )
-
-        self.bn = nn.BatchNorm2d(dim_out)
 
     def forward(self, x):
         x1 = self.conv1(x)
-        x1 = self.bn(x + x1)
+        x1 = x + x1
 
         x2 = self.conv2(x1)
-        x2 = self.bn(x1 + x2)
+        x2 = x1 + x2
 
         return x2
