@@ -10,24 +10,35 @@ class Decoder(nn.Module):
             nn.ELU(),
         )
 
-        self.upsample1  = nn.Sequential(
-            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ELU(),
-            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ELU()
+        self.upsample1 = nn.Sequential(
+            nn.UpsamplingBilinear2d(scale_factor = 2),
+            nn.UpsamplingBilinear2d(scale_factor = 2),
         )
 
-        self.upsample2  = nn.Sequential(
-            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
+        self.upsample_fixer1 = nn.Sequential(
+            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
             nn.ELU(),
-            nn.ConvTranspose2d(num_classes, num_classes, kernel_size = 4, stride = 2, padding = 1),
-            nn.ELU()
         )
+
+        self.upsample2 = nn.Sequential(
+            nn.UpsamplingBilinear2d(scale_factor = 2),
+            nn.UpsamplingBilinear2d(scale_factor = 2),
+        )        
+
+        self.upsample_fixer2 = nn.Sequential(
+            DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
+            nn.ELU(),
+        )        
 
     def forward(self, x):
         x   = self.back_channel_extractor(x)
 
-        x   = self.upsample1(x)        
-        x   = self.upsample2(x)
+        x1  = self.upsample1(x)
+        x11 = self.upsample_fixer1(x1)
+        x1  = x11 + x1
 
-        return x
+        x2  = self.upsample1(x1)
+        x21 = self.upsample_fixer1(x2)
+        x2  = x21 + x2
+
+        return x2

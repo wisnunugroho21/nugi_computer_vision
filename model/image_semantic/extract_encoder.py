@@ -15,8 +15,6 @@ class ExtractEncoder(nn.Module):
         self.conv2 = nn.Sequential(
             DepthwiseSeparableConv2d(dim_in, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
             nn.ELU(),
-            DepthwiseSeparableConv2d(dim_out, dim_out, kernel_size = 3, stride = 1, padding = 1, bias = False),
-            nn.ELU()
         )
 
     def forward(self, x):

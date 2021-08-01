@@ -73,22 +73,21 @@ clrloss         = ContrastiveMM(True)
 for epoch in range(50):
     running_loss = 0.0
     for i, data in enumerate(clrloader, 0):
+        clroptimizer.zero_grad()
+
         input1, input2  = data
         input1, input2  = input1.to(device), input2.to(device)
 
-        clroptimizer.zero_grad()
-        with torch.cuda.amp.autocast():
-            mid1   = encoder(input1).mean([2, 3])
-            out1   = projector(mid1)
+        mid1    = encoder(input1).mean([2, 3])
+        out1    = projector(mid1)
 
-            mid2   = encoder1(input2).mean([2, 3])
-            out2   = projector1(mid2)
+        mid2    = encoder1(input2).mean([2, 3])
+        out2    = projector1(mid2)
 
-            loss = clrloss.compute_loss(out1, out2.detach())
+        loss    = clrloss.compute_loss(out1, out2.detach())
 
-        clrscaler.scale(loss).backward()
-        clrscaler.step(clroptimizer)
-        clrscaler.update()        
+        loss.backward()
+        clroptimizer.step()        
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, loss.item()))
 
@@ -108,19 +107,18 @@ segloss         = nn.CrossEntropyLoss()
 
 for epoch in range(50):
     for i, data in enumerate(trainloader, 0):
+        segoptimizer.zero_grad()
+
         images, labels    = data
         images, labels    = images.to(device), labels.to(device)
 
-        segoptimizer.zero_grad()
-        with torch.cuda.amp.autocast():
-            mid = encoder(images)
-            out = decoder(mid)
+        mid = encoder(images)
+        out = decoder(mid)
 
-            loss = segloss(out, labels)
+        loss = segloss(out, labels)
 
-        segscaler.scale(loss).backward()
-        segscaler.step(segoptimizer)
-        segscaler.update()
+        loss.backward()
+        segoptimizer.step()
 
         print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, loss.item()))
 

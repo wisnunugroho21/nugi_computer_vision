@@ -10,11 +10,6 @@ class Encoder(nn.Module):
 
         self.spatialenc = AtrousSpatialPyramidConv2d(3, 16, 64)
 
-        # self.enc0 = nn.Sequential(
-        #     DepthwiseSeparableConv2d(3, 64, kernel_size = 3, stride = 1, padding = 1),
-        #     nn.ELU()
-        # )
-
         self.enc1 = ExtractEncoder(64, 64)
         self.enc2 = ExtractEncoder(64, 64)
         self.enc3 = DownsamplerEncoder(64, 128)
