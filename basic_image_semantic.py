@@ -12,6 +12,8 @@ from model.clr.projection import Projection
 
 import matplotlib.pyplot as plt
 
+from copy import deepcopy
+
 def display(display_list, title):
     for i in range(len(display_list)):
         plt.subplot(1, len(display_list), i + 1)
@@ -60,8 +62,8 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = Tr
 testset     = PennFudanPedDataset(root = 'dataset', transforms1 = trans_input, transforms2 = trans_label)
 testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 8)
 
-encoder, encoder1     = Encoder(), Encoder()
-projector, projector1 = Projection(), Projection()
+encoder, projector      = Encoder(), Projection() 
+encoder1, projector1    = deepcopy(encoder), deepcopy(projector)
 
 encoder, projector    = encoder.to(device), projector.to(device)
 encoder1, projector1  = encoder1.to(device), projector1.to(device)
