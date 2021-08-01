@@ -1,2 +1,5 @@
 /dataset
 /weights
+
+*.pth
+*.pyc
