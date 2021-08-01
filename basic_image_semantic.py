@@ -24,6 +24,7 @@ def display(display_list, title):
         plt.axis('off')
     plt.show()
 
+epochs = 50
 PATH = '.'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -53,13 +54,13 @@ trans_label  = transforms.Compose([
     transforms.Resize((256, 256))
 ])
 
-clrset      = ClrPennFudanPedDataset(root = 'dataset', transforms1 = trans_clr1, transforms2 = trans_clr2)
+clrset      = ClrPennFudanPedDataset(root = 'dataset/PennFudanPed', transforms1 = trans_clr1, transforms2 = trans_clr2)
 clrloader   = torch.utils.data.DataLoader(clrset, batch_size = 8, shuffle = True, num_workers = 8)
 
-trainset    = PennFudanPedDataset(root = 'dataset', transforms1 = trans_input, transforms2 = trans_label)
+trainset    = PennFudanPedDataset(root = 'dataset/PennFudanPed', transforms1 = trans_input, transforms2 = trans_label)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = True, num_workers = 8)
 
-testset     = PennFudanPedDataset(root = 'dataset', transforms1 = trans_input, transforms2 = trans_label)
+testset     = PennFudanPedDataset(root = 'dataset/PennFudanPed', transforms1 = trans_input, transforms2 = trans_label)
 testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 8)
 
 encoder, projector      = Encoder(), Projection() 
@@ -72,7 +73,7 @@ clroptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(projector.p
 clrscaler       = torch.cuda.amp.GradScaler()
 clrloss         = ContrastiveMM(True)
 
-for epoch in range(50):
+for epoch in range(epochs):
     running_loss = 0.0
     for i, data in enumerate(clrloader, 0):
         clroptimizer.zero_grad()
@@ -100,14 +101,14 @@ torch.save(encoder.state_dict(), PATH + '/encoder.pth')
 
 # -----------------------------------------------------------------------------------------------------------
 
-decoder = Decoder(num_classes = 2)
+decoder = Decoder(num_classes = 3)
 decoder = decoder.to(device)
 
 segoptimizer    = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr = 0.001)
 segscaler       = torch.cuda.amp.GradScaler()
 segloss         = nn.CrossEntropyLoss()
 
-for epoch in range(50):
+for epoch in range(epochs):
     for i, data in enumerate(trainloader, 0):
         segoptimizer.zero_grad()
 
