@@ -4,11 +4,13 @@ from model.component.depthwise_separable_conv2d import DepthwiseSeparableConv2d
 from model.image_semantic.extract_encoder import ExtractEncoder
 from model.image_semantic.downsampler_encoder import DownsamplerEncoder
 
+from model.component.covnet_attention import CovnetAttention
+
 class Encoder(nn.Module):
     def __init__(self, num_classes = 3):
         super(Encoder, self).__init__()
 
-        self.spatialenc = AtrousSpatialPyramidConv2d(3, 16, 64)
+        """ self.spatialenc = AtrousSpatialPyramidConv2d(3, 16, 64)
 
         self.enc1 = ExtractEncoder(64, 64)
         self.enc2 = ExtractEncoder(64, 64)
@@ -17,10 +19,24 @@ class Encoder(nn.Module):
         self.enc5 = ExtractEncoder(128, 128)
         self.enc6 = DownsamplerEncoder(128, 256)
         self.enc7 = ExtractEncoder(256, 256)
-        self.enc8 = ExtractEncoder(256, 256)
+        self.enc8 = ExtractEncoder(256, 256) """
+
+        self.net = nn.Sequential(
+            DepthwiseSeparableConv2d(3, 16, kernel_size = 3, stride = 1, padding = 1, bias = False),
+            nn.GELU(),
+            nn.BatchNorm2d(16),
+            ExtractEncoder(16, 16),
+            CovnetAttention(16),
+            DownsamplerEncoder(16, 32),
+            ExtractEncoder(32, 32),
+            CovnetAttention(32),
+            DownsamplerEncoder(32, 64),
+            ExtractEncoder(64, 64),
+            CovnetAttention(64)
+        )
 
     def forward(self, x):
-        x   = self.spatialenc(x)
+        """ x   = self.spatialenc(x)
         # x   = self.enc0(x)
 
         x   = self.enc1(x)
@@ -30,6 +46,6 @@ class Encoder(nn.Module):
         x   = self.enc5(x)
         x   = self.enc6(x)
         x   = self.enc7(x)
-        x   = self.enc8(x)
+        x   = self.enc8(x) """
 
-        return x
+        return self.net(x)

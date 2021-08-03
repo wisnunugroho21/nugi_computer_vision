@@ -29,8 +29,8 @@ PATH = '.'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 trans_clr1 = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.RandomResizedCrop(256),                           
+    transforms.Resize((128, 128)),
+    transforms.RandomResizedCrop(128),                           
     transforms.RandomApply([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)], p = 0.8),
     transforms.RandomGrayscale(p = 0.2),
     transforms.GaussianBlur(25),
@@ -39,19 +39,19 @@ trans_clr1 = transforms.Compose([
 ])
 
 trans_clr2 = transforms.Compose([
-    transforms.Resize((256, 256)),
+    transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
 trans_input = transforms.Compose([
-    transforms.Resize((256, 256)),
+    transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
 trans_label  = transforms.Compose([
-    transforms.Resize((256, 256))
+    transforms.Resize((128, 128))
 ])
 
 clrset      = ClrPennFudanPedDataset(root = 'dataset/PennFudanPed', transforms1 = trans_clr1, transforms2 = trans_clr2)
@@ -63,7 +63,10 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size = 8, shuffle = Tr
 testset     = PennFudanPedDataset(root = 'dataset/PennFudanPed', transforms1 = trans_input, transforms2 = trans_label)
 testloader  = torch.utils.data.DataLoader(testset, batch_size = 8, shuffle = False, num_workers = 8)
 
-encoder, projector      = Encoder(), Projection() 
+encoder     = Encoder()
+encoder     = encoder.to(device)
+
+""" encoder, projector      = Encoder(), Projection() 
 encoder1, projector1    = deepcopy(encoder), deepcopy(projector)
 
 encoder, projector    = encoder.to(device), projector.to(device)
@@ -97,7 +100,7 @@ for epoch in range(epochs):
     print('loop clr -> ', epoch + 1)
 
 print('Finished Pre-Training')
-torch.save(encoder.state_dict(), PATH + '/encoder.pth')
+torch.save(encoder.state_dict(), PATH + '/encoder.pth') """
 
 # -----------------------------------------------------------------------------------------------------------
 
@@ -154,7 +157,7 @@ torch.save(decoder.state_dict(), PATH + '/decoder.pth')
 
 # -------------------------------------------------------------------
 
-images, labels  = testset[0]
+images, labels  = testset[0:5]
 images          = images.unsqueeze(0)
 images, labels  = images.to(device), labels.to(device)
 
@@ -164,9 +167,9 @@ out = decoder(mid)
 disInput    = images.squeeze(0).transpose(0, 1).transpose(1, 2)
 disOutput   = out.squeeze(0).transpose(0, 1).transpose(1, 2).argmax(-1)
 
-display([disInput.cpu(), labels.cpu(), disOutput.cpu()], ['Input Image', 'True Mask', 'Predicted Mask'])
+display([disInput[0].cpu(), labels[0].cpu(), disOutput[0].cpu()], ['Input Image', 'True Mask', 'Predicted Mask'])
 
-# -----------------------------------------------------------------------------
+""" # -----------------------------------------------------------------------------
 
 images, labels  = testset[10]
 images          = images.unsqueeze(0)
@@ -192,4 +195,4 @@ out = decoder(mid)
 disInput    = images.squeeze(0).transpose(0, 1).transpose(1, 2)
 disOutput   = out.squeeze(0).transpose(0, 1).transpose(1, 2).argmax(-1)
 
-display([disInput.cpu(), labels.cpu(), disOutput.cpu()], ['Input Image', 'True Mask', 'Predicted Mask'])
+display([disInput.cpu(), labels.cpu(), disOutput.cpu()], ['Input Image', 'True Mask', 'Predicted Mask']) """

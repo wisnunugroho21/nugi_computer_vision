@@ -6,8 +6,8 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()       
 
         self.back_channel_extractor = nn.Sequential(
-            DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ELU(),
+            DepthwiseSeparableConv2d(64, num_classes, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
         )
 
         self.upsample1 = nn.Sequential(
@@ -17,7 +17,7 @@ class Decoder(nn.Module):
 
         self.upsample_fixer1 = nn.Sequential(
             DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ELU(),
+            nn.ReLU(),
         )
 
         self.upsample2 = nn.Sequential(
@@ -27,7 +27,7 @@ class Decoder(nn.Module):
 
         self.upsample_fixer2 = nn.Sequential(
             DepthwiseSeparableConv2d(num_classes, num_classes, kernel_size = 3, stride = 1, padding = 1),
-            nn.ELU(),
+            nn.ReLU(),
         )        
 
     def forward(self, x):
@@ -37,8 +37,8 @@ class Decoder(nn.Module):
         x11 = self.upsample_fixer1(x1)
         x1  = x11 + x1
 
-        x2  = self.upsample1(x1)
-        x21 = self.upsample_fixer1(x2)
+        x2  = self.upsample2(x1)
+        x21 = self.upsample_fixer2(x2)
         x2  = x21 + x2
 
         return x2
