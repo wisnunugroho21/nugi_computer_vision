@@ -16,15 +16,15 @@ transform = transforms.Compose(
 
 batch_size = 16
 
-trainset = torchvision.datasets.CIFAR100(root='./data', train=True,
-                                        download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                          shuffle=True, num_workers=2)
+trainset = torchvision.datasets.CIFAR100(root='./data', train = True,
+                                        download = True, transform = transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size = batch_size,
+                                          shuffle = True, num_workers = 8)
 
 testset = torchvision.datasets.CIFAR100(root='./data', train=False,
-                                       download=True, transform=transform)
-testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                         shuffle=False, num_workers=2)
+                                       download = True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size = batch_size,
+                                         shuffle = False, num_workers = 8)
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -52,19 +52,19 @@ class Net(nn.Module):
             nn.BatchNorm2d(32),
             ExtractEncoder(32, 32),
             DepthwiseSeparableConv2d(32, 64, kernel_size = 2, stride = 2),
-            nn.ReLU(),
+            nn.ELU(),
             ExtractEncoder(64, 64),
             DepthwiseSeparableConv2d(64, 128, kernel_size = 2, stride = 2),
-            nn.ReLU(),
+            nn.ELU(),
             ExtractEncoder(128, 128),
             DepthwiseSeparableConv2d(128, 256, kernel_size = 2, stride = 2),
-            nn.ReLU(),
+            nn.ELU(),
+            DepthwiseSeparableConv2d(256, 512, kernel_size = 4, stride = 4),
+            nn.ELU(),
             nn.Flatten(),
-            nn.Linear(256 * 4 * 4, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 256),
-            nn.ReLU(),
-            nn.Linear(256, 100)
+            nn.Linear(512, 128),
+            nn.ELU(),
+            nn.Linear(128, 100)
         )
 
     def forward(self, x):
@@ -122,7 +122,7 @@ with torch.no_grad():
 print('Accuracy of the network on the 10000 test images: %d %%' % (
     100 * correct / total))
 
-""" # prepare to count predictions for each class
+# prepare to count predictions for each class
 correct_pred = {classname: 0 for classname in classes}
 total_pred = {classname: 0 for classname in classes}
 
@@ -143,4 +143,4 @@ with torch.no_grad():
 for classname, correct_count in correct_pred.items():
     accuracy = 100 * float(correct_count) / total_pred[classname]
     print("Accuracy for class {:5s} is: {:.1f} %".format(classname,
-                                                   accuracy)) """
+                                                   accuracy))

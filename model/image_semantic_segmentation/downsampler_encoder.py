@@ -7,17 +7,16 @@ class DownsamplerEncoder(nn.Module):
         super(DownsamplerEncoder, self).__init__()
 
         self.downsampler1 = nn.Sequential(
-            nn.Conv2d(dim_in, dim_in, kernel_size = 4, stride = 2, padding = 1, groups = dim_in, bias = False),
-            nn.Conv2d(dim_in, dim_in, kernel_size = 4, stride = 2, padding = 1, groups = dim_in, bias = False)
+            nn.Conv2d(dim_in, dim_out, kernel_size = 4, stride = 2, padding = 1, groups = dim_in)
         )
         self.downsampler2 = nn.Sequential(
-            nn.Conv2d(dim_in, dim_in, kernel_size = 8, stride = 4, padding = 2, groups = dim_in, bias = False),
+            nn.Conv2d(dim_in, dim_out, kernel_size = 2, stride = 2, groups = dim_in),
         )
 
         self.out = nn.Sequential(
-            nn.Conv2d(2 * dim_in, dim_out, kernel_size = 1),
-            nn.ELU()
-        )
+            nn.Conv2d(2 * dim_out, dim_out, kernel_size = 1),
+            nn.ReLU()
+        ) 
 
     def forward(self, x):        
         x1      = self.downsampler1(x)

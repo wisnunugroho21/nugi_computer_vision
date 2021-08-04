@@ -1,8 +1,8 @@
 import torch.nn as nn
 from model.component.atrous_spatial_pyramid_conv2d import AtrousSpatialPyramidConv2d
 from model.component.depthwise_separable_conv2d import DepthwiseSeparableConv2d
-from model.image_semantic.extract_encoder import ExtractEncoder
-from model.image_semantic.downsampler_encoder import DownsamplerEncoder
+from model.covnet_attention.extract_encoder import ExtractEncoder
+from model.image_semantic_segmentation.downsampler_encoder import DownsamplerEncoder
 
 from model.component.covnet_attention import CovnetAttention
 
@@ -21,18 +21,37 @@ class Encoder(nn.Module):
         self.enc7 = ExtractEncoder(256, 256)
         self.enc8 = ExtractEncoder(256, 256) """
 
-        self.net = nn.Sequential(
-            DepthwiseSeparableConv2d(3, 16, kernel_size = 3, stride = 1, padding = 1, bias = False),
+        """ self.net = nn.Sequential(
+            DepthwiseSeparableConv2d(3, 16, kernel_size = 3, stride = 1, padding = 1),
             nn.GELU(),
             nn.BatchNorm2d(16),
             ExtractEncoder(16, 16),
-            CovnetAttention(16),
+            DepthwiseSeparableConv2d(16, 32, kernel_size = 2, stride = 2),
+            nn.ReLU(),
+            ExtractEncoder(32, 32),
+            DepthwiseSeparableConv2d(32, 64, kernel_size = 2, stride = 2),
+            nn.ReLU(),
+            ExtractEncoder(64, 64),
+            DepthwiseSeparableConv2d(64, 128, kernel_size = 2, stride = 2),
+            nn.ReLU(),
+            ExtractEncoder(128, 128),
+            DepthwiseSeparableConv2d(128, 256, kernel_size = 2, stride = 2),
+            nn.ReLU(),
+        ) """
+
+        self.net = nn.Sequential(            
+            DepthwiseSeparableConv2d(3, 16, kernel_size = 1),
+            nn.GELU(),
+            nn.BatchNorm2d(16),
+            ExtractEncoder(16, 16),
             DownsamplerEncoder(16, 32),
             ExtractEncoder(32, 32),
-            CovnetAttention(32),
             DownsamplerEncoder(32, 64),
             ExtractEncoder(64, 64),
-            CovnetAttention(64)
+            DownsamplerEncoder(64, 128),
+            ExtractEncoder(128, 128),
+            DownsamplerEncoder(128, 256),
+            ExtractEncoder(256, 256),
         )
 
     def forward(self, x):

@@ -5,7 +5,7 @@ import os
 import numpy as np
 from PIL import Image
 
-masks   = Image.open('dataset/PennFudanPed/annotations/FudanPed00001_mask.png')
+masks   = Image.open('dataset/Pet/annotations/Abyssinian_1.png')
 masks   = np.array(masks)
 
 print(masks.shape)

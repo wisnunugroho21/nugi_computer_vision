@@ -6,7 +6,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()       
 
         self.back_channel_extractor = nn.Sequential(
-            DepthwiseSeparableConv2d(64, num_classes, kernel_size = 3, stride = 1, padding = 1),
+            DepthwiseSeparableConv2d(256, num_classes, kernel_size = 3, stride = 1, padding = 1),
             nn.ReLU(),
         )
 
